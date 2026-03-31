@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+cleanup() {
+    echo "Cleaning-up!"
+    kill ${socat_pid}
+}
+
+# Start a socat relay
+socat UNIX-LISTEN:$HOME/var/run/agent-shell-proxy.sock,fork TCP:127.0.0.1:10385 &
+socat_pid=$!
+# Doesn't seem to be needed?
+# trap cleanup EXIT
+
+squid -z --foreground -f $HOME/etc/agent-shell-squid.conf
+squid -N -d 1 -f $HOME/etc/agent-shell-squid.conf

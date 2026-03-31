@@ -1,0 +1,21 @@
+#+TITLE: INSTALL
+#+AUTHOR: Michael Herstine
+#+EMAIL: sp1ff@pobox.com
+#+DESCRIPTION: Installation procedure for agent-shell
+#+DATE: <2026-03-31 Tue 10:13>
+#+AUTODATE: t
+#+OPTIONS: num:nil ^:{}
+#+STARTUP: overview
+
+Installation is at this point manual. There _is_ an =install= script, but the user should read it carefully before running it.
+
+There are two components that need to be setup:
+
+  - the whitelisting proxy
+  - the =agent-shell= script itself
+** agent-shell
+
+Simply copy =src/agent-shell= to the destination of your choice (e.g. =/usr/local/bin=, =~/local/bin=, and so forth) and make it executable. The =install= script installs it into =~/bin=.
+** Whitelisting Proxy
+
+The project uses the squid proxy for this, but provides some support for setting it up as a user systemd unit (the one instance will serve all your sandboxes). Read the =install= script for how this is setup.

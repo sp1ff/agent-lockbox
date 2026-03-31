@@ -1,0 +1,247 @@
+#!/usr/bin/env bash
+
+# Copyright (C) 2026 Michael Herstine <sp1ff@pobox.com>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as
+# published by the Free Software Foundation; either version 3 of the
+# License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301 USA
+
+
+# This is my first attempt at sandboxing coding agents. Heavily based on that
+# of ndbecker here:
+# <https://github.com/nbecker/codex-emacs-notes/blob/main/bub.sh>. Also Taiki
+# Sakamoto's post "Trying out bubblewrap used in Claude Code's Sandbox Runtime
+# and exploring its network restriction mechanism"
+# <https://www.sambaiz.net/en/article/547/>. The basic idea is to use
+# bubblewrap to setup a sandboxed filesystem, mount a Unix socket therein, and
+# use socat for all network comms through it. On the host, forward the Unix
+# socket to a dedicated squid instance that will whitelist destinations.
+
+VERSION=0.0.1
+
+set -euo pipefail
+
+api_key=
+claude_md=
+help=
+nargs=0
+prev_option=
+rust=
+verbose=
+version=
+xtra_mount=
+xtra_mounts=
+for option
+do
+
+    # Accumulate mounts
+    if test -n "$xtra_mount"; then
+        IFS=: read -r host sandbox <<< "$xtra_mount"
+        xtra_mounts="$xtra_mounts --ro-bind $host $sandbox"
+        xtra_mount=
+    fi
+
+    # If the previous option required an argument, assign it now.
+    if test -n "$prev_option"; then
+        eval $prev_option=\$option
+        prev_option=
+        nargs=$(($nargs+1))
+        continue
+    fi
+
+    # Parse out the argument option in $option, if present.
+    case $option in
+        *=?*) optarg=$(expr "X$option" : '[^=]*=\(.*\)') ;;
+        *=)   optarg= ;;
+        *)    optarg=yes ;;
+    esac
+
+    # Options are handled here:
+    case $option in
+        -A | --api | --api-key)
+	        nargs=$(($nargs+1));
+            prev_option=api_key;;
+        -A=* | --api=* | --api-key=*)
+	        nargs=$(($nargs+1));
+            api_key=$optarg;;
+        -C | --mount-claude-md)
+	        nargs=$(($nargs+1));
+            claude_md=yes;;
+        -X | --extra-mount)
+	        nargs=$(($nargs+1));
+            prev_option=xtra_mount;;
+        -X=* | --extra-mount=*)
+	        nargs=$(($nargs+1));
+            xtra_mount=$optarg;;
+        -h | --he | --hel | --help)
+	        nargs=$(($nargs+1));
+            help=yes;;
+        -r | --enable-rust)
+	        nargs=$(($nargs+1));
+            rust=yes;;
+        -v | --verb | --verbose)
+	        nargs=$(($nargs+1));
+            verbose=yes;;
+        -V | --vers | --version)
+	        nargs=$(($nargs+1));
+            version=yes;;
+        -*)
+            cat >&2 <<EOF
+Unrecognized option '$option'.
+Try '$0 --help' for more information.
+EOF
+            exit 2;;
+	    *)
+	        # $@ now contains the arguments, $# the number of arguments
+	        shift $nargs;
+	        break;;
+    esac
+
+done
+
+# If the last command line argument was the value for an extra mount, this will
+# not have been procssed, yet.
+if test -n "$xtra_mount"; then
+    IFS=: read -r host sandbox <<< "$xtra_mount"
+    xtra_mounts="$xtra_mounts --ro-bind $host $sandbox"
+    xtra_mount=
+fi
+
+if test -n "${help}"; then
+    cat <<EOF
+agent-shell -- Start a bash shell sandboxed for coding agents
+
+Usage:
+
+    agent-shell [OPTION...] ARGUMENT...
+
+Options:
+
+    -h, --help      Print this message & exit
+    -V, --version   Print this script's version & exit
+    -v, --verbose   Produce prolix output
+    -A KEY, --api-key=KEY  Specify your Anthropic API key
+    -C, --mount-claude-md  Mount ~/.claude/CLAUDE.md into the sandbox
+    -X MNT, --extra-mount=MNT  Mount MNT (as host:sandbox) read-only
+                    into the sandbox
+    -r, --enable-rust  Enable Rust development by mounting ~/.cargo
+                    and ~/.rustup into the sandbox
+
+EOF
+    exit 0
+fi
+
+if test -n "${version}"; then
+    cat <<EOF
+agent-shell $VERSION
+EOF
+    exit 0
+fi
+
+if test -n "${verbose}"; then
+    set -x
+fi
+
+uid=$(id -u)
+gid=$(id -g)
+here=$(pwd)
+
+# A local dot-directory that will be mapped into the sandbox, as our home
+# directory (in the sandbox)
+dot_agent="$here/.agent-shell"
+dot_agent_claude="$dot_agent/.claude"
+mkdir -p $dot_agent_claude
+
+host_claude_config_json="$HOME/.claude/config.json"
+dot_agent_claude_config_json="$dot_agent_claude/config.json"
+
+args=(
+    --die-with-parent
+    --unshare-net
+    --unshare-ipc
+    --unshare-uts
+    --unshare-cgroup
+    --unshare-user
+    --cap-drop ALL
+
+    --ro-bind /bin /bin
+    --ro-bind /usr /usr
+    --ro-bind /lib /lib
+    --ro-bind /lib64 /lib64
+    --ro-bind /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+    --dev /dev
+    --proc /proc
+    --tmpfs /tmp
+
+    --uid "$uid"
+    --gid "$gid"
+
+    --bind "$dot_agent" /home/sandbox
+    --setenv HOME /home/sandbox
+
+    --ro-bind "$HOME/.gitconfig" /home/sandbox/.gitconfig
+    --ro-bind "$HOME/.gitignore_global " /home/sandbox/.gitignore_global
+
+    # Without this, Claude won't even start. I suspect it's looking for
+    # ~/.local/share/claude/versions/2.1.79. Nb. we have to mount it into the
+    # sandbox as ~mgh/.local because there are symlinks therein that we need to
+    # work (claude itself is a symlink, e.g.)
+    --ro-bind "$HOME/.local" "$HOME/.local"
+
+    # This seems crucial-- without this I can't authenticate from inside the
+    # sandbox (?) But I think it just contains credentials cached from a
+    # previous authn-- not sure what will happen when I run this when I'm not
+    # authenticated, already.
+    --bind "$HOME/.claude.json" /home/sandbox/.claude.json
+
+    --bind "$here" /workspace
+    --chdir /workspace
+
+    --bind /home/mgh/var/run/agent-shell-proxy.sock /run/user/$(id -u)/agent-shell-proxy.sock
+    --setenv http_proxy http://127.0.0.1:8080
+    --setenv https_proxy http://127.0.0.1:8080
+)
+
+sandbox_path="$HOME/.local/bin:/usr/bin"
+
+bwrap_args="${args[@]}"
+if test -n "$api_key"; then
+    bwrap_args="$bwrap_args --setenv ANTHROPIC_API_KEY $api_key"
+fi
+# IIRC, there are other init files you can have Claude read (custom commands &
+# skills off the top of my head)-- will need to add support for them.
+if test -n "$claude_md"; then
+    bwrap_args="$bwrap_args --bind $HOME/.claude/CLAUDE.md /home/sandbox/.claude/CLAUDE.md"
+fi
+if test -n "$rust"; then
+    bwrap_args="$bwrap_args --bind $HOME/.cargo /home/sandbox/.cargo"
+    bwrap_args="$bwrap_args --bind $HOME/.rustup /home/sandbox/.rustup"
+    # Do I need this?
+    # bwrap_args="$bwrap_args --setenv CARGO_HOME /home/sandbox/.cargo"
+    sandbox_path="/home/sandbox/.cargo/bin:$sandbox_path"
+fi
+if test -n "$xtra_mounts"; then
+    bwrap_args="$bwrap_args $xtra_mounts"
+fi
+
+bwrap_args="$bwrap_args --setenv PATH $sandbox_path"
+
+# TODO(sp1ff): Do I want to source my .bashrc? .bash_login?
+exec bwrap $bwrap_args bash -c \
+     "socat TCP4-LISTEN:8080,fork UNIX-CONNECT:/run/user/$(id -u)/agent-shell-proxy.sock & \
+     SOCAT_PID=\$!
+     trap \"kill \$SOCAT_PID\" EXIT
+     bash -i"
+#    👆 do not `exec` here! We'll lose the trap.

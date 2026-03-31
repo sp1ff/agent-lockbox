@@ -1,0 +1,17 @@
+[Unit]
+Description=Agent Shell Squid Proxy
+
+[Service]
+Type=simple
+ExecStart=/home/mgh/bin/agent-shell-squid-proxy
+
+# Ensure logs go to the user journal
+StandardOutput=journal
+StandardError=journal
+
+# Optional but commonly useful
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

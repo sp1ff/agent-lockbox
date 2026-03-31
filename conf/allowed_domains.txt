@@ -1,0 +1,17 @@
+# Anthropic API
+.anthropic.com
+.claude.com
+
+# Crates.io registry
+.crates.io
+
+# Rust documentation
+.docs.rs
+
+# GitHub (Cargo fetches git dependencies from here)
+.github.com
+.raw.githubusercontent.com
+
+# rustup (in case the agent needs toolchain components)
+.rustup.rs
+.static.rust-lang.org

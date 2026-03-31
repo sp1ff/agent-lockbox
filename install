@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+set -x
+
+mkdir -p $HOME/var/run
+mkdir -p $HOME/var/cache/agent-sandbox-squid
+mkdir -p $HOME/var/log/agent-sandbox-squid
+
+cp -v conf/agent-shell-squid.conf /tmp/agent-shell-squid.$$.conf
+sed -i -e "s@HOME@$HOME@g" /tmp/agent-shell-squid.$$.conf
+
+install -m 644 conf/allowed_domains.txt $HOME/etc
+install -m 644 /tmp/agent-shell-squid.$$.conf $HOME/etc/agent-shell-squid.conf 
+install -m 755 src/agent-shell-squid-proxy $HOME/bin
+install -m 755 src/agent-shell $HOME/bin
+install -m 644 conf/agent-shell-squid.service $HOME/.config/systemd/user

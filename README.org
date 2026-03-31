@@ -1,0 +1,32 @@
+#+TITLE: README
+#+AUTHOR: Michael Herstine
+#+EMAIL: sp1ff@pobox.com
+#+DESCRIPTION: General overview of the agent-shell project for humans
+#+DATE: <2026-03-31 Tue 10:13>
+#+AUTODATE: t
+#+OPTIONS: num:nil ^:{}
+#+STARTUP: overview
+
+* Introduction
+
+=agent-shell= is a sandbox for running coding agents with relaxed permissions.
+
+Once installed, the =agent-shell= command will start a sandboxed bash shell in which you can run a coding agent safely. The shell has read-write access only to the directory in which it is started (presumably your project directory), and limited read-only access to the rest of the system. All network communication is forced through a whitelisting proxy giving you control over where the agent can go on the internet.
+
+This makes it considerably safer to run the agent with limited to no restrictions on what actions it can take.
+* License
+
+=agent-shell= is released under the [[https://spdx.org/licenses/GPL-3.0-or-later.html][GPL v3.0]].
+* Pre-requisites
+
+=agent-shell= depends on:
+
+  - [[https://www.squid-cache.org/][squid]]
+  - [[https://www.man7.org/linux/man-pages/man1/socat.1.html][socat]]
+  - [[https://github.com/containers/bubblewrap][bubblewrap]]
+* Installation
+
+Manual, at this time. See the [[file:INSTALL.org][INSTALL]] file for details.
+* Status & Roadmap
+
+This is code I hacked together over a weekend to scratch a personal itch; at this point, it's really more a proof of concept than a finished product. I've only used it with Claude Code while working in Rust, but I'm planning on expanding that.
