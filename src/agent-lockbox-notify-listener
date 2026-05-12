@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+sock=$HOME/var/run/agent-lockbox-notify.sock
+
+rm -f "$sock"
+
+cleanup() {
+    rm -f "$sock"
+}
+trap cleanup EXIT
+
+# Listen forever; each line received becomes a desktop notification.
+while true; do
+    socat -u UNIX-LISTEN:"$sock",fork STDOUT \
+    | while IFS= read -r msg; do
+        [ -n "$msg" ] && notify-send "Sandbox" "$msg"
+    done
+done

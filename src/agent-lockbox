@@ -33,8 +33,9 @@ VERSION=0.0.1
 set -euo pipefail
 
 api_key=
-claude_md=
+claude_home=
 help=
+mount_docker_socket=
 nargs=0
 prev_option=
 rust=
@@ -75,9 +76,12 @@ do
         -A=* | --api=* | --api-key=*)
 	        nargs=$(($nargs+1));
             api_key=$optarg;;
-        -C | --mount-claude-md)
+        -C | --mount-claude-home)
 	        nargs=$(($nargs+1));
-            claude_md=yes;;
+            claude_home=yes;;
+        -D | --mount-docker-socket)
+	        nargs=$(($nargs+1));
+            mount_docker_socket=yes;;
         -X | --extra-mount)
 	        nargs=$(($nargs+1));
             prev_option=xtra_mount;;
@@ -120,11 +124,11 @@ fi
 
 if test -n "${help}"; then
     cat <<EOF
-agent-shell -- Start a bash shell sandboxed for coding agents
+agent-lockbox -- Start a bash shell sandboxed for coding agents
 
 Usage:
 
-    agent-shell [OPTION...] ARGUMENT...
+    agent-lockbox [OPTION...] ARGUMENT...
 
 Options:
 
@@ -132,7 +136,9 @@ Options:
     -V, --version   Print this script's version & exit
     -v, --verbose   Produce prolix output
     -A KEY, --api-key=KEY  Specify your Anthropic API key
-    -C, --mount-claude-md  Mount ~/.claude/CLAUDE.md into the sandbox
+    -C, --mount-claude-home  Mount ~/.claude into the sandbox
+    -D, --mount-docker-socket  Mount the Docker Unix domain socket;
+                    handy if your test suite uses Docker
     -X MNT, --extra-mount=MNT  Mount MNT (as host:sandbox) read-only
                     into the sandbox
     -r, --enable-rust  Enable Rust development by mounting ~/.cargo
@@ -144,7 +150,7 @@ fi
 
 if test -n "${version}"; then
     cat <<EOF
-agent-shell $VERSION
+agent-lockbox $VERSION
 EOF
     exit 0
 fi
@@ -159,12 +165,9 @@ here=$(pwd)
 
 # A local dot-directory that will be mapped into the sandbox, as our home
 # directory (in the sandbox)
-dot_agent="$here/.agent-shell"
+dot_agent="$here/.agent-lockbox"
 dot_agent_claude="$dot_agent/.claude"
 mkdir -p $dot_agent_claude
-
-host_claude_config_json="$HOME/.claude/config.json"
-dot_agent_claude_config_json="$dot_agent_claude/config.json"
 
 args=(
     --die-with-parent
@@ -209,9 +212,11 @@ args=(
     --bind "$here" /workspace
     --chdir /workspace
 
-    --bind /home/mgh/var/run/agent-shell-proxy.sock /run/user/$(id -u)/agent-shell-proxy.sock
+    --bind "$HOME"/var/run/agent-lockbox-proxy.sock /run/user/$(id -u)/agent-lockbox-proxy.sock
     --setenv http_proxy http://127.0.0.1:8080
     --setenv https_proxy http://127.0.0.1:8080
+
+    --bind "$HOME"/var/run/agent-lockbox-notify.sock /run/user/$(id -u)/agent-lockbox-notify.sock
 )
 
 sandbox_path="$HOME/.local/bin:/usr/bin"
@@ -220,10 +225,8 @@ bwrap_args="${args[@]}"
 if test -n "$api_key"; then
     bwrap_args="$bwrap_args --setenv ANTHROPIC_API_KEY $api_key"
 fi
-# IIRC, there are other init files you can have Claude read (custom commands &
-# skills off the top of my head)-- will need to add support for them.
-if test -n "$claude_md"; then
-    bwrap_args="$bwrap_args --bind $HOME/.claude/CLAUDE.md /home/sandbox/.claude/CLAUDE.md"
+if test -n "$claude_home"; then
+    bwrap_args="$bwrap_args --bind $HOME/.claude /home/sandbox/.claude"
 fi
 if test -n "$rust"; then
     bwrap_args="$bwrap_args --bind $HOME/.cargo /home/sandbox/.cargo"
@@ -235,12 +238,14 @@ fi
 if test -n "$xtra_mounts"; then
     bwrap_args="$bwrap_args $xtra_mounts"
 fi
-
+if test -n "$mount_docker_socket"; then
+    bwrap_args="$bwrap_args --bind /var/run/docker.sock /var/run/docker.sock"
+fi
 bwrap_args="$bwrap_args --setenv PATH $sandbox_path"
 
 # TODO(sp1ff): Do I want to source my .bashrc? .bash_login?
 exec bwrap $bwrap_args bash -c \
-     "socat TCP4-LISTEN:8080,fork UNIX-CONNECT:/run/user/$(id -u)/agent-shell-proxy.sock & \
+     "socat TCP4-LISTEN:8080,fork UNIX-CONNECT:/run/user/$(id -u)/agent-lockbox-proxy.sock & \
      SOCAT_PID=\$!
      trap \"kill \$SOCAT_PID\" EXIT
      bash -i"

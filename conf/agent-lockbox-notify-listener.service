@@ -1,9 +1,9 @@
 [Unit]
-Description=Agent Shell Squid Proxy
+Description=Agent Lockbox notification listener
 
 [Service]
 Type=simple
-ExecStart=/home/mgh/bin/agent-shell-squid-proxy
+ExecStart=%h/bin/agent-lockbox-notify-listener
 
 # Ensure logs go to the user journal
 StandardOutput=journal
