@@ -34,6 +34,7 @@ set -euo pipefail
 
 api_key=
 claude_home=
+codex_home=
 help=
 mount_docker_socket=
 nargs=0
@@ -82,6 +83,9 @@ do
         -D | --mount-docker-socket)
 	        nargs=$(($nargs+1));
             mount_docker_socket=yes;;
+        -O | --mount-codex-home)
+            nargs=$(($nargs+1));
+            codex_home=yes;;
         -X | --extra-mount)
 	        nargs=$(($nargs+1));
             prev_option=xtra_mount;;
@@ -139,6 +143,7 @@ Options:
     -C, --mount-claude-home  Mount ~/.claude into the sandbox
     -D, --mount-docker-socket  Mount the Docker Unix domain socket;
                     handy if your test suite uses Docker
+    -O, --mount-codex-home   Mount ~/.codex into the sandbox
     -X MNT, --extra-mount=MNT  Mount MNT (as host:sandbox) read-only
                     into the sandbox
     -r, --enable-rust  Enable Rust development by mounting ~/.cargo
@@ -166,8 +171,9 @@ here=$(pwd)
 # A local dot-directory that will be mapped into the sandbox, as our home
 # directory (in the sandbox)
 dot_agent="$here/.agent-lockbox"
-dot_agent_claude="$dot_agent/.claude"
-mkdir -p $dot_agent_claude
+# TODO(sp1ff): needed?
+# dot_agent_claude="$dot_agent/.claude"
+# mkdir -p $dot_agent_claude
 
 args=(
     --die-with-parent
@@ -203,12 +209,6 @@ args=(
     # work (claude itself is a symlink, e.g.)
     --ro-bind "$HOME/.local" "$HOME/.local"
 
-    # This seems crucial-- without this I can't authenticate from inside the
-    # sandbox (?) But I think it just contains credentials cached from a
-    # previous authn-- not sure what will happen when I run this when I'm not
-    # authenticated, already.
-    --bind "$HOME/.claude.json" /home/sandbox/.claude.json
-
     --bind "$here" /workspace
     --chdir /workspace
 
@@ -227,6 +227,14 @@ if test -n "$api_key"; then
 fi
 if test -n "$claude_home"; then
     bwrap_args="$bwrap_args --bind $HOME/.claude /home/sandbox/.claude"
+    # This seems crucial-- without this I can't authenticate from inside the
+    # sandbox (?) But I think it just contains credentials cached from a
+    # previous authn-- not sure what will happen when I run this when I'm not
+    # authenticated, already.
+    bwrap_args="$bwrap_args --bind $HOME/.claude.json /home/sandbox/.claude.json"
+fi
+if test -n "$codex_home"; then
+    bwrap_args="$bwrap_args --bind $HOME/.codex /home/sandbox/.codex"
 fi
 if test -n "$rust"; then
     bwrap_args="$bwrap_args --bind $HOME/.cargo /home/sandbox/.cargo"
