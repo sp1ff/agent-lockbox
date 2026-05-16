@@ -2,7 +2,7 @@
 #+AUTHOR: Michael Herstine
 #+EMAIL: sp1ff@pobox.com
 #+DESCRIPTION: General overview of the agent-lockbox project for humans
-#+DATE: <2026-05-06 Wed 09:53>
+#+DATE: <2026-05-16 Sat 11:31>
 #+AUTODATE: t
 #+OPTIONS: num:nil ^:{}
 #+STARTUP: overview
@@ -29,6 +29,6 @@ This makes it considerably safer to run the agent with limited to no restriction
 Manual, at this time. See the [[file:INSTALL.org][INSTALL]] file for details.
 * Status & Roadmap
 
-This is code I hacked together over a weekend to scratch a personal itch; at this point, it's really more a proof of concept than a finished product. I've only used it with Claude Code while working in Rust, but I'm planning on expanding that.
+This is code I hacked together over a weekend to scratch a personal itch; at this point, it's really more a proof of concept than a finished product. I've only used it with Claude Code and OpenAI Codex while working in Rust, but I'm planning on expanding that.
 
 I'd originally named this project "agent-shell", but it turns out that name is taken by a [[https://melpa.org/#/agent-shell][fairly popular]] Emacs package, so I went with "agent-lockbox". Apologies to whoever forked this repo in the meantime.
