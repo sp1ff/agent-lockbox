@@ -2,7 +2,7 @@
 #+AUTHOR: Michael Herstine
 #+EMAIL: sp1ff@pobox.com
 #+DESCRIPTION: General overview of the agent-lockbox project for humans
-#+DATE: <2026-05-16 Sat 11:31>
+#+DATE: <2026-05-16 Sat 11:34>
 #+AUTODATE: t
 #+OPTIONS: num:nil ^:{}
 #+STARTUP: overview
@@ -13,7 +13,7 @@
 
 Once installed, the =agent-shell= command will start a sandboxed bash shell in which you can run a coding agent safely. The shell has read-write access only to the directory in which it is started (presumably your project directory), and limited read-only access to the rest of the system. All network communication is forced through a whitelisting proxy giving you control over where the agent can go on the internet.
 
-This makes it considerably safer to run the agent with limited to no restrictions on what actions it can take.
+This makes it considerably safer to run the agent with limited to no restrictions on what actions it can take. Since you now don't have to babysit the agent while it asks for permission to do this or that, I've setup a little tool by which the agent can use =notify-send= to alert you when it needs your attention. I turn it loose to work & switch to another workspace to do my own work, secure in the knowledge that the agent can alert me if it needs something.
 * License
 
 =agent-lockbox= is released under the [[https://spdx.org/licenses/GPL-3.0-or-later.html][GPL v3.0]].
