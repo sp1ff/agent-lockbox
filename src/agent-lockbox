@@ -28,13 +28,14 @@
 # use socat for all network comms through it. On the host, forward the Unix
 # socket to a dedicated squid instance that will whitelist destinations.
 
-VERSION=0.0.1
+VERSION=0.0.2
 
 set -euo pipefail
 
 api_key=
 claude_home=
 codex_home=
+emacs_socket=
 help=
 mount_docker_socket=
 nargs=0
@@ -83,6 +84,12 @@ do
         -D | --mount-docker-socket)
 	        nargs=$(($nargs+1));
             mount_docker_socket=yes;;
+        -E | --emacs-socket)
+	        nargs=$(($nargs+1));
+            prev_option=emacs_socket;;
+        -E=* | --emacs-socket=*)
+	        nargs=$(($nargs+1));
+            emacs_socket=$optarg;;
         -O | --mount-codex-home)
             nargs=$(($nargs+1));
             codex_home=yes;;
@@ -143,6 +150,9 @@ Options:
     -C, --mount-claude-home  Mount ~/.claude into the sandbox
     -D, --mount-docker-socket  Mount the Docker Unix domain socket;
                     handy if your test suite uses Docker
+    -E PATH, --emacs-socket=PATH  Path to the Emacs server socket
+                    to be mounted into the sandbox. Inside the sandbox,
+                    the socket will be available at /var/run/emacs
     -O, --mount-codex-home   Mount ~/.codex into the sandbox
     -X MNT, --extra-mount=MNT  Mount MNT (as host:sandbox) read-only
                     into the sandbox
@@ -170,10 +180,8 @@ here=$(pwd)
 
 # A local dot-directory that will be mapped into the sandbox, as our home
 # directory (in the sandbox)
+test -d .agent-lockbox || mkdir .agent-lockbox
 dot_agent="$here/.agent-lockbox"
-# TODO(sp1ff): needed?
-# dot_agent_claude="$dot_agent/.claude"
-# mkdir -p $dot_agent_claude
 
 args=(
     --die-with-parent
@@ -249,9 +257,11 @@ fi
 if test -n "$mount_docker_socket"; then
     bwrap_args="$bwrap_args --bind /var/run/docker.sock /var/run/docker.sock"
 fi
+if test -n "$emacs_socket"; then
+    bwrap_args="$bwrap_args --bind $emacs_socket /var/run/emacs"
+fi
 bwrap_args="$bwrap_args --setenv PATH $sandbox_path"
 
-# TODO(sp1ff): Do I want to source my .bashrc? .bash_login?
 exec bwrap $bwrap_args bash -c \
      "socat TCP4-LISTEN:8080,fork UNIX-CONNECT:/run/user/$(id -u)/agent-lockbox-proxy.sock & \
      SOCAT_PID=\$!
